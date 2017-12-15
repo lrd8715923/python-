@@ -1,0 +1,724 @@
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<time.h>
+#include<conio.h>
+#include<math.h>
+void compress();
+void uncompress();
+int window();
+void convert16to2(unsigned char con);
+typedef struct tree
+{
+	int weight;
+	int number;
+	int leaf;
+	tree *left;
+	tree *right;
+}tree;
+void Traverse(int ascii,tree *Node,int layer,FILE *sfp,FILE *afp);
+int code[255];
+int hash[256];
+int write[8];
+int length1;
+int length2;
+int convert[8];
+unsigned char writecode=0;
+int writecount=0;
+int main()
+{
+	while(1)
+	{
+		if(window()==0)
+			break;
+	}
+	return 0;
+}
+int window()
+{
+	printf("请输入您想要进行的操作:\n");
+	printf("1.压缩\n2.解压\n3.退出\n");
+	char ch;
+	ch=getch();
+	if(ch=='1')
+	{
+		compress();
+		return 1;
+	}
+	if(ch=='2')
+	{
+		uncompress();
+		return 1;
+	}
+	if(ch=='3')
+	{
+		return 0;
+	}
+}
+void compress()
+{
+	printf("请输入待解压的文件名称:");
+	char filename[100];
+	gets(filename);
+	FILE *cfp,*afp,*sfp;
+	cfp=fopen(filename,"rb");
+	if(cfp==NULL)
+	{
+   		printf("文件打开失败!\n");
+   		return;
+	}
+	printf("请输入解压后的文件名称:");
+	gets(filename);
+	afp=fopen(strcat(filename,".RayDao"),"wb");
+	if(afp==NULL)
+	{
+	   printf("压缩文件失败!\n");
+	   return;
+	}
+	sfp=fopen("password.txt","w");
+	if(sfp==NULL)
+	{
+		printf("压缩文件失败!\n");
+		return;
+	}
+	for(int init=0;init<256;init++)
+		hash[init]=0;
+	unsigned char read;
+	length1=0;
+	length2=0;
+	while(!feof(cfp))
+	{
+		fread(&read,sizeof(char),1,cfp);
+		hash[read]++;
+		length1++;
+	}
+	length1--;
+	hash[read]--;
+	int count=0;
+	for(int i=0;i<256;i++)
+	{
+		if(hash[i]!=0)
+			count++;
+	}
+	fwrite(&count,sizeof(int),1,afp);
+	fwrite(&length1,sizeof(int),1,afp);
+	tree *huffman[2*count-1];
+	for(int j=0,k=0;j<256;j++)
+	{
+		if(hash[j]!=0)
+		{
+			tree *Htree;
+			Htree=(tree*)malloc(sizeof(tree));
+			Htree->weight=hash[j];
+			Htree->number=j;
+			fwrite(&j,sizeof(int),1,afp);
+			fwrite(&hash[j],sizeof(int),1,afp);
+			Htree->leaf=0;
+			Htree->left=NULL;
+			Htree->right=NULL;
+			huffman[k]=Htree;
+			k++;
+		}
+	}
+	for(int l=count;l<2*count-1;l++)
+	{
+		tree *Htree;
+		Htree=(tree*)malloc(sizeof(tree));
+		Htree->weight=NULL;
+		Htree->number=-1;
+		Htree->leaf=0;
+		Htree->left=NULL;
+		Htree->right=NULL;
+		huffman[l]=Htree;
+	}
+	int times=count;
+	srand((unsigned)time(NULL));
+	while(times!=1)
+	{
+		times--;
+		tree *min1;
+		min1=(tree*)malloc(sizeof(tree));
+		tree *min2;
+		min2=(tree*)malloc(sizeof(tree));
+		int rand1;
+		rand1=0;
+		while(1)
+		{
+			//rand1=rand()%(2*count-1);
+			min1=huffman[rand1];
+			//if(min1->leaf==0&&min1->weight!=0)
+			//break;
+			if(min1->leaf==0&&min1->weight!=0)
+			break;
+			rand1++;
+		}
+		int rand2;
+		rand2=0;
+		while(1)
+		{
+			//rand2=rand()%(2*count-1);
+			min2=huffman[rand2];
+			//break;
+			if(min2->leaf==0&&min2->weight!=0&&rand1!=rand2)
+			break;
+			rand2++;
+		};
+		for(int u=0;u<2*count-1;u++)
+		{
+			if(min1->weight>huffman[u]->weight&&huffman[u]->leaf==0
+			&&huffman[u]->weight!=0&&u!=rand2)
+			{
+				min1=huffman[u];
+				rand1=u;
+			}
+		}
+		for(int o=0;o<2*count-1;o++)
+		{
+			if(min2->weight>huffman[o]->weight&&huffman[o]->leaf==0
+			&&huffman[o]->weight!=0&&rand1!=o)
+			{
+				min2=huffman[o];
+				rand2=o;
+			}
+		}
+		if(min1->weight>min2->weight)
+		{
+			tree *t;
+			t=(tree*)malloc(sizeof(tree));
+			t=min1;
+			min1=min2;
+			min2=t;
+		}
+		if(min1->weight==min2->weight)
+		{
+			if(rand1>rand2)
+			{
+				tree *t;
+				t=(tree*)malloc(sizeof(tree));
+				t=min1;
+				min1=min2;
+				min2=t;
+			}
+		}
+		min1->leaf=1;
+		min2->leaf=1;
+		int p=count;
+		while(huffman[p]->weight!=0)
+			p++;
+		huffman[p]->left=min1;
+		huffman[p]->right=min2;
+		huffman[p]->weight=min1->weight+min2->weight;
+		printf("%d %d\n",min1->weight,min2->weight);
+	}
+	for(int ll=0;ll<2*count-1;ll++)
+	fseek(cfp,0,SEEK_SET);
+	for(int r=0;r<8;r++)
+		write[r]=-1;
+	while(!feof(cfp))
+	{
+		for(int i=0;i<255;i++)
+		{
+			code[i]=-1;
+		}
+		fread(&read,sizeof(char),1,cfp);
+		if(feof(cfp)!=0)
+		break;
+		Traverse(read,huffman[2*count-2],0,sfp,afp);
+	}
+	printf("%d\n",length2);
+	int add=0;
+	while(write[add]!=-1)
+	add++;
+	if(add>0&&add<8)
+	{
+		while(add>0&&add<8)
+		{
+			write[add]=0;
+			add++;
+		}
+		int i3=0;
+		while(i3<=7)
+		{
+			if(write[i3]==1)
+			writecode+=pow(2,7-i3);
+			i3++;
+		}
+		fwrite(&writecode,sizeof(unsigned char),1,afp);
+		length2+=8;
+	}		
+	fclose(cfp);
+	fclose(afp);
+	fclose(sfp);
+	//printf("%x %d %c\n",writecode,writecode,writecode);
+	printf("rate:%f\n",(float)length2/(float)length1/8.0);
+	printf("%d\n",length2);
+}
+void Traverse(int ascii,tree *Node,int layer,FILE *sfp,FILE *afp)
+{
+	if(Node->number!=-1)
+	{
+		if(Node->number==ascii)
+		{
+			if(hash[ascii]!=0)
+			{			
+				fprintf(sfp,"Ascii:%d\tText:",ascii);
+				for(int j=0;code[j]!=-1;j++)
+				fprintf(sfp,"%d",code[j]);
+				fprintf(sfp,"\n");
+				hash[ascii]=0;
+			}
+			int codecount=0;
+			for(int k=0;code[k]!=-1;k++)
+				codecount++;
+			for(int k=0;write[k]!=-1&&writecount!=8;k++)
+				writecount++;
+			int clear;
+			while(codecount+writecount>=8)
+			{
+				for(int k2=0;k2+writecount!=8;k2++)
+					{
+						write[k2+writecount]=code[0];
+						codecount--;
+						for(int e=0;e<codecount;e++)
+						{
+							code[e]=code[e+1];
+						}				
+						code[codecount]=-1;
+					}
+				int i4=0;
+				while(i4<=7)
+				{
+					if(write[i4]==1)
+					writecode+=pow(2,7-i4);
+					i4++;
+				}
+				fwrite(&writecode,sizeof(unsigned char),1,afp);			
+				writecode=0;
+				writecount=0;
+				length2+=8;
+				for(clear=0;clear<8;clear++)
+					write[clear]=-1;
+			}
+			if(codecount+writecount<8)	
+			{
+				int concount=0;
+				writecount+=codecount;
+				for(int j1=0;write[j1]!=-1;j1++)
+					concount++;
+				for(int j2=0;j2<codecount;j2++)
+					write[concount+j2]=code[j2];
+				codecount=0;
+				writecount=0;
+			}	
+		}
+		return;
+	}
+	code[layer]=0;
+	Traverse(ascii,Node->left,layer+1,sfp,afp);
+	code[layer]=1;
+	Traverse(ascii,Node->right,layer+1,sfp,afp);
+	code[layer]=-1;
+}
+void uncompress()
+{
+	printf("请输入要解压的文件名称:");
+	char filename[255];
+	FILE *afp,*ffp;
+	gets(filename);
+	afp=fopen(strcat(filename,".RayDao"),"rb");
+	if(afp==NULL)
+	{
+	   printf("解压文件失败!\n");
+	   return;
+	}
+	printf("请输入解压后的文件名称(带后缀):");
+	gets(filename);
+	ffp=fopen(filename,"wb");
+	if(ffp==NULL)
+	{
+	   printf("解压文件失败!\n");
+	   return;
+	}
+	int count;
+	fread(&count,sizeof(int),1,afp);
+	int reduce=count;
+	int length1;
+	fread(&length1,sizeof(int),1,afp);
+	tree *huffman[2*count-1];
+	int position;
+	int inithash;
+	for(inithash=0;inithash<256;inithash++)
+		hash[inithash]=0;
+	while(reduce!=0)
+	{
+		fread(&position,sizeof(int),1,afp);
+		fread(&hash[position],sizeof(int),1,afp);
+		reduce--;
+	}
+	for(int j=0,k=0;j<256;j++)
+	{
+		if(hash[j]!=0)
+		{
+			tree *Htree;
+			Htree=(tree*)malloc(sizeof(tree));
+			Htree->weight=hash[j];
+			Htree->number=j;
+			fwrite(&j,sizeof(int),1,afp);
+			fwrite(&hash[j],sizeof(int),1,afp);
+			Htree->leaf=0;
+			Htree->left=NULL;
+			Htree->right=NULL;
+			huffman[k]=Htree;
+			k++;
+		}
+	}
+	for(int l=count;l<2*count-1;l++)
+	{
+		tree *Htree;
+		Htree=(tree*)malloc(sizeof(tree));
+		Htree->weight=NULL;
+		Htree->number=-1;
+		Htree->leaf=0;
+		Htree->left=NULL;
+		Htree->right=NULL;
+		huffman[l]=Htree;
+	}
+	int times=count;
+	srand((unsigned)time(NULL));
+	while(times!=1)
+	{
+		times--;
+		tree *min1;
+		min1=(tree*)malloc(sizeof(tree));
+		tree *min2;
+		min2=(tree*)malloc(sizeof(tree));
+		int rand1;
+		rand1=0;
+		while(1)
+		{
+			min1=huffman[rand1];
+			if(min1->leaf==0&&min1->weight!=0)
+			break;
+			rand1++;
+		}
+		int rand2;
+		rand2=0;
+		while(1)
+		{
+			min2=huffman[rand2];
+			if(min2->leaf==0&&min2->weight!=0&&rand1!=rand2)
+			break;
+			rand2++;
+		};
+		for(int u=0;u<2*count-1;u++)
+		{
+			if(min1->weight>huffman[u]->weight&&huffman[u]->leaf==0
+			&&huffman[u]->weight!=0&&u!=rand2)
+			{
+				min1=huffman[u];
+				rand1=u;
+			}
+		}
+		for(int o=0;o<2*count-1;o++)
+		{
+			if(min2->weight>huffman[o]->weight&&huffman[o]->leaf==0
+			&&huffman[o]->weight!=0&&rand1!=o)
+			{
+				min2=huffman[o];
+				rand2=o;
+			}
+		}
+		if(min1->weight>min2->weight)
+		{
+			tree *t;
+			t=(tree*)malloc(sizeof(tree));
+			t=min1;
+			min1=min2;
+			min2=t;
+		}
+		if(min1->weight==min2->weight)
+		{
+			if(rand1>rand2)
+			{
+				tree *t;
+				t=(tree*)malloc(sizeof(tree));
+				t=min1;
+				min1=min2;
+				min2=t;
+			}
+		}
+		min1->leaf=1;
+		min2->leaf=1;
+		int p=count;
+		while(huffman[p]->weight!=0)
+			p++;
+		huffman[p]->left=min1;
+		huffman[p]->right=min2;
+		huffman[p]->weight=min1->weight+min2->weight;
+		printf("%d %d\n",min1->weight,min2->weight);
+	}
+	for(int clear=0;clear<8;clear++)
+		convert[clear]=-1;
+	int unlength=length1;
+	unsigned char read;
+	int seek=0;
+	while(unlength!=0)
+	{
+		if(seek==8)
+			seek=0;
+		tree *Node=huffman[2*count-2];
+		if(convert[0]==-1)
+		fread(&read,sizeof(unsigned char),1,afp);
+		convert16to2(read);
+		while(seek!=8)
+		{	
+			if(Node->number!=-1)
+			{
+				fwrite(&Node->number,sizeof(unsigned char),1,ffp);
+				break;
+			}
+			if(Node->number==-1)
+			{
+				if(convert[seek]==0)
+					Node=Node->left;
+				if(convert[seek]==1)
+					Node=Node->right;
+				seek++;
+			}
+		}
+		unlength--;
+	}
+}
+void convert16to2(unsigned char con)
+{
+	for(int clear=0;clear<8;clear++)
+		convert[clear]=-1;
+	int before;
+	int after;
+	before=con/16;
+	after=con%16;
+	if(before==0)
+	{
+		convert[0]=0;
+		convert[1]=0;
+		convert[2]=0;
+		convert[3]=0;
+	}
+	if(before==1)
+	{
+		convert[0]=0;
+		convert[1]=0;
+		convert[2]=0;
+		convert[3]=1;
+	}
+	if(before==2)
+	{
+		convert[0]=0;
+		convert[1]=0;
+		convert[2]=1;
+		convert[3]=0;
+	}
+	if(before==3)
+	{
+		convert[0]=0;
+		convert[1]=0;
+		convert[2]=1;
+		convert[3]=1;
+	}
+	if(before==4)
+	{
+		convert[0]=0;
+		convert[1]=1;
+		convert[2]=0;
+		convert[3]=0;
+	}
+	if(before==5)
+	{
+		convert[0]=0;
+		convert[1]=1;
+		convert[2]=0;
+		convert[3]=1;
+	}
+	if(before==6)
+	{
+		convert[0]=0;
+		convert[1]=1;
+		convert[2]=1;
+		convert[3]=0;
+	}
+	if(before==7)
+	{
+		convert[0]=0;
+		convert[1]=1;
+		convert[2]=1;
+		convert[3]=1;
+	}
+	if(before==8)
+	{
+		convert[0]=1;
+		convert[1]=0;
+		convert[2]=0;
+		convert[3]=0;
+	}
+	if(before==9)
+	{
+		convert[0]=1;
+		convert[1]=0;
+		convert[2]=0;
+		convert[3]=1;
+	}
+	if(before==10)
+	{
+		convert[0]=1;
+		convert[1]=0;
+		convert[2]=1;
+		convert[3]=0;
+	}
+	if(before==11)
+	{
+		convert[0]=1;
+		convert[1]=0;
+		convert[2]=1;
+		convert[3]=1;
+	}
+	if(before==12)
+	{
+		convert[0]=1;
+		convert[1]=1;
+		convert[2]=0;
+		convert[3]=0;
+	}
+	if(before==13)
+	{
+		convert[0]=1;
+		convert[1]=1;
+		convert[2]=0;
+		convert[3]=1;
+	}
+	if(before==14)
+	{
+		convert[0]=1;
+		convert[1]=1;
+		convert[2]=1;
+		convert[3]=0;
+	}
+	if(before==15)
+	{
+		convert[0]=1;
+		convert[1]=1;
+		convert[2]=1;
+		convert[3]=1;
+	}
+	if(after==0)
+	{
+		convert[4]=0;
+		convert[5]=0;
+		convert[6]=0;
+		convert[7]=0;
+	}
+	if(after==1)
+	{
+		convert[4]=0;
+		convert[5]=0;
+		convert[6]=0;
+		convert[7]=1;
+	}
+	if(after==2)
+	{
+		convert[4]=0;
+		convert[5]=0;
+		convert[6]=1;
+		convert[7]=0;
+	}
+	if(after==3)
+	{
+		convert[4]=0;
+		convert[5]=0;
+		convert[6]=1;
+		convert[7]=1;
+	}
+	if(after==4)
+	{
+		convert[4]=0;
+		convert[5]=1;
+		convert[6]=0;
+		convert[7]=0;
+	}
+	if(after==5)
+	{
+		convert[4]=0;
+		convert[5]=1;
+		convert[6]=0;
+		convert[7]=1;
+	}
+	if(after==6)
+	{
+		convert[4]=0;
+		convert[5]=1;
+		convert[6]=1;
+		convert[7]=0;
+	}
+	if(after==7)
+	{
+		convert[4]=0;
+		convert[5]=1;
+		convert[6]=1;
+		convert[7]=1;
+	}
+	if(after==8)
+	{
+		convert[4]=1;
+		convert[5]=0;
+		convert[6]=0;
+		convert[7]=0;
+	}
+	if(after==9)
+	{
+		convert[4]=1;
+		convert[5]=0;
+		convert[6]=0;
+		convert[7]=1;
+	}
+	if(after==10)
+	{
+		convert[4]=1;
+		convert[5]=0;
+		convert[6]=1;
+		convert[7]=0;
+	}
+	if(after==11)
+	{
+		convert[4]=1;
+		convert[5]=0;
+		convert[6]=1;
+		convert[7]=1;
+	}
+	if(after==12)
+	{
+		convert[4]=1;
+		convert[5]=1;
+		convert[6]=0;
+		convert[7]=0;
+	}
+	if(after==13)
+	{
+		convert[4]=1;
+		convert[5]=1;
+		convert[6]=0;
+		convert[7]=1;
+	}
+	if(after==14)
+	{
+		convert[4]=1;
+		convert[5]=1;
+		convert[6]=1;
+		convert[7]=0;
+	}
+	if(after==15)
+	{
+		convert[4]=1;
+		convert[5]=1;
+		convert[6]=1;
+		convert[7]=1;
+	}
+}
